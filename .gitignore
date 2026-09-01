@@ -1,0 +1,26 @@
+.DS_Store
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+.gradle-home/
+build/
+*/build/
+
+# Local Android SDK / machine-specific config
+.android-sdk/
+local.properties
+
+# Generated packages and signing artifacts
+*.apk
+*.aab
+*.ap_
+*.jks
+*.keystore
+
+# Android tooling output
+captures/
+app/release/

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">DriveTouch Verifier</string>
+    <string name="accessibility_service_description">Records recent accessibility interaction events for DriveTouch evidence reports.</string>
+    <string name="quick_settings_tile_label">Save DriveTouch</string>
+</resources>
