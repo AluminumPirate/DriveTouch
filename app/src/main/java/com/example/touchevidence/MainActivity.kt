@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -114,6 +115,7 @@ private fun DriveTouchApp(settings: AppSettings) {
     var selectedLog by remember { mutableStateOf<SavedEvidenceLogEntry?>(null) }
     var deleteCandidate by remember { mutableStateOf<SavedEvidenceLogEntry?>(null) }
     var safeAppsDialogOpen by remember { mutableStateOf(false) }
+    var onboardingOpen by remember { mutableStateOf(!settings.hasSeenOnboarding()) }
     var safePackages by remember { mutableStateOf(settings.safePackages()) }
     var saveInProgress by remember { mutableStateOf(false) }
 
@@ -227,6 +229,7 @@ private fun DriveTouchApp(settings: AppSettings) {
             onDeleteLog = { deleteCandidate = it },
             safePackageCount = safePackages.size,
             onManageSafeApps = { safeAppsDialogOpen = true },
+            onShowGuide = { onboardingOpen = true },
         )
     }
 
@@ -249,6 +252,19 @@ private fun DriveTouchApp(settings: AppSettings) {
                 settings.setSafePackages(it)
             },
             onDismiss = { safeAppsDialogOpen = false },
+        )
+    }
+
+    if (onboardingOpen) {
+        OnboardingDialog(
+            onSkip = {
+                settings.setHasSeenOnboarding(true)
+                onboardingOpen = false
+            },
+            onFinish = {
+                settings.setHasSeenOnboarding(true)
+                onboardingOpen = false
+            },
         )
     }
 
@@ -304,6 +320,7 @@ private fun DashboardScreen(
     onDeleteLog: (SavedEvidenceLogEntry) -> Unit,
     safePackageCount: Int,
     onManageSafeApps: () -> Unit,
+    onShowGuide: () -> Unit,
 ) {
     LazyColumn(
         modifier = modifier
@@ -312,16 +329,30 @@ private fun DashboardScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            Text(
-                text = "DriveTouch",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "Save a CSV snapshot of recent accessibility interaction events.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "DriveTouch",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "Save a CSV snapshot of recent accessibility interaction events.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = onShowGuide,
+                    modifier = Modifier.compactButton(),
+                ) {
+                    Text("Guide")
+                }
+            }
         }
 
         item {
@@ -397,6 +428,186 @@ private fun DashboardScreen(
         } else {
             items(state.rollingLogs.takeLast(10).reversed()) { entry ->
                 RollingLogRow(entry)
+            }
+        }
+    }
+}
+
+private data class OnboardingStep(
+    val title: String,
+    val body: String,
+    val focus: GuideFocus,
+)
+
+private enum class GuideFocus {
+    Service,
+    Period,
+    Save,
+    Review,
+}
+
+private val onboardingSteps = listOf(
+    OnboardingStep(
+        title = "Turn on recording",
+        body = "Enable the accessibility service once. Android requires this in Settings, and DriveTouch cannot switch it on silently.",
+        focus = GuideFocus.Service,
+    ),
+    OnboardingStep(
+        title = "Choose the evidence period",
+        body = "This is the recent history kept ready for a snapshot. The rolling database is pruned aggressively so it does not grow forever.",
+        focus = GuideFocus.Period,
+    ),
+    OnboardingStep(
+        title = "Save when it matters",
+        body = "Use Save Evidence CSV in the app, or add the Save DriveTouch Quick Settings tile for a silent one-tap save.",
+        focus = GuideFocus.Save,
+    ),
+    OnboardingStep(
+        title = "Read the saved CSV",
+        body = "Saved logs are separate snapshots. You can view, filter, highlight safe apps, share, or delete them. They cannot be edited here.",
+        focus = GuideFocus.Review,
+    ),
+)
+
+@Composable
+private fun OnboardingDialog(
+    onSkip: () -> Unit,
+    onFinish: () -> Unit,
+) {
+    var stepIndex by remember { mutableStateOf(0) }
+    val step = onboardingSteps[stepIndex]
+    val isLastStep = stepIndex == onboardingSteps.lastIndex
+
+    AlertDialog(
+        onDismissRequest = onSkip,
+        title = { Text(step.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                GuidePreview(focus = step.focus)
+                Text(
+                    text = step.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    onboardingSteps.forEachIndexed { index, _ ->
+                        Box(
+                            modifier = Modifier
+                                .size(width = if (index == stepIndex) 22.dp else 8.dp, height = 8.dp)
+                                .background(
+                                    color = if (index == stepIndex) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    shape = MaterialTheme.shapes.small,
+                                ),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (isLastStep) {
+                        onFinish()
+                    } else {
+                        stepIndex++
+                    }
+                },
+                modifier = Modifier.compactButton(),
+            ) {
+                Text(if (isLastStep) "Done" else "Next")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (stepIndex > 0) {
+                    TextButton(
+                        onClick = { stepIndex-- },
+                        modifier = Modifier.compactButton(),
+                    ) {
+                        Text("Back")
+                    }
+                }
+                TextButton(
+                    onClick = onSkip,
+                    modifier = Modifier.compactButton(),
+                ) {
+                    Text("Skip")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun GuidePreview(focus: GuideFocus) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GuidePreviewRow(
+                label = "Accessibility service",
+                value = "Active / Disabled",
+                isFocused = focus == GuideFocus.Service,
+            )
+            GuidePreviewRow(
+                label = "Evidence period",
+                value = "5 / 10 / 15 min",
+                isFocused = focus == GuideFocus.Period,
+            )
+            GuidePreviewRow(
+                label = "Save Evidence CSV",
+                value = "Snapshot now",
+                isFocused = focus == GuideFocus.Save,
+            )
+            GuidePreviewRow(
+                label = "Saved Evidence CSVs",
+                value = "View, filter, share, delete",
+                isFocused = focus == GuideFocus.Review,
+            )
+        }
+    }
+}
+
+@Composable
+private fun GuidePreviewRow(label: String, value: String, isFocused: Boolean) {
+    Surface(
+        color = if (isFocused) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(
+                        color = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = MaterialTheme.shapes.small,
+                    ),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

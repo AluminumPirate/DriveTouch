@@ -37,6 +37,7 @@ Saved evidence CSVs are separate from the rolling table and are deleted only whe
 
 ## App Features
 
+- Skippable first-run guide with a compact explanation of the main controls.
 - Compose dashboard with system light/dark theme.
 - Accessibility Settings shortcut.
 - Safe-app highlighting for apps such as Waze or Google Maps.

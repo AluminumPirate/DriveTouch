@@ -26,9 +26,20 @@ class AppSettings(context: Context) {
             .apply()
     }
 
+    fun hasSeenOnboarding(): Boolean {
+        return prefs.getBoolean(KEY_HAS_SEEN_ONBOARDING, false)
+    }
+
+    fun setHasSeenOnboarding(hasSeen: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_HAS_SEEN_ONBOARDING, hasSeen)
+            .apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "drive_touch_settings"
         private const val KEY_RETENTION_MINUTES = "retention_minutes"
         private const val KEY_SAFE_PACKAGES = "safe_packages"
+        private const val KEY_HAS_SEEN_ONBOARDING = "has_seen_onboarding"
     }
 }
