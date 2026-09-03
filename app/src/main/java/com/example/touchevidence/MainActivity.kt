@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.touchevidence.data.AppDatabase
+import com.example.touchevidence.data.InputSourceTypes
 import com.example.touchevidence.data.SavedEvidenceLogEntry
 import com.example.touchevidence.data.TouchEventTypes
 import com.example.touchevidence.data.TouchLogEntry
@@ -98,6 +99,7 @@ private data class DashboardState(
 private enum class FilterKind {
     App,
     Event,
+    Source,
 }
 
 private data class KnownApp(
@@ -948,12 +950,21 @@ private fun SavedLogDialog(
             .distinct()
             .sorted()
     }
+    val sourceOptions = remember(rows) {
+        rows
+            .map { it.inputSource.ifBlank { InputSourceTypes.UnknownLegacy } }
+            .distinct()
+            .sorted()
+    }
     var includedApps by remember(log.id, appOptions) { mutableStateOf(appOptions.toSet()) }
     var includedEvents by remember(log.id, eventOptions) { mutableStateOf(eventOptions.toSet()) }
+    var includedSources by remember(log.id, sourceOptions) { mutableStateOf(sourceOptions.toSet()) }
     var activeFilter by remember(log.id) { mutableStateOf<FilterKind?>(null) }
-    val filteredRows = remember(rows, includedApps, includedEvents) {
+    val filteredRows = remember(rows, includedApps, includedEvents, includedSources) {
         rows.filter { row ->
-            row.appName.ifBlank { "Unknown" } in includedApps && row.eventType in includedEvents
+            row.appName.ifBlank { "Unknown" } in includedApps &&
+                row.eventType in includedEvents &&
+                row.inputSource.ifBlank { InputSourceTypes.UnknownLegacy } in includedSources
         }
     }
     AlertDialog(
@@ -978,6 +989,12 @@ private fun SavedLogDialog(
                         modifier = Modifier.compactButton(),
                     ) {
                         Text(filterLabel("Events", includedEvents.size, eventOptions.size))
+                    }
+                    OutlinedButton(
+                        onClick = { activeFilter = FilterKind.Source },
+                        modifier = Modifier.compactButton(),
+                    ) {
+                        Text(filterLabel("Touch", includedSources.size, sourceOptions.size))
                     }
                 }
                 Text(
@@ -1007,16 +1024,37 @@ private fun SavedLogDialog(
 
     activeFilter?.let { kind ->
         val isAppFilter = kind == FilterKind.App
+        val isEventFilter = kind == FilterKind.Event
         MultiSelectFilterDialog(
-            title = if (isAppFilter) "Show apps" else "Show events",
-            options = if (isAppFilter) appOptions else eventOptions,
-            selected = if (isAppFilter) includedApps else includedEvents,
-            displayName = { option -> if (isAppFilter) option else eventLabel(option) },
+            title = when (kind) {
+                FilterKind.App -> "Show apps"
+                FilterKind.Event -> "Show events"
+                FilterKind.Source -> "Show touch source"
+            },
+            options = when (kind) {
+                FilterKind.App -> appOptions
+                FilterKind.Event -> eventOptions
+                FilterKind.Source -> sourceOptions
+            },
+            selected = when (kind) {
+                FilterKind.App -> includedApps
+                FilterKind.Event -> includedEvents
+                FilterKind.Source -> includedSources
+            },
+            displayName = { option ->
+                when (kind) {
+                    FilterKind.App -> option
+                    FilterKind.Event -> eventLabel(option)
+                    FilterKind.Source -> inputSourceLabel(option)
+                }
+            },
             onSelectedChange = { selected ->
                 if (isAppFilter) {
                     includedApps = selected
-                } else {
+                } else if (isEventFilter) {
                     includedEvents = selected
+                } else {
+                    includedSources = selected
                 }
             },
             onDismiss = { activeFilter = null },
@@ -1165,6 +1203,11 @@ private fun EvidenceRow(row: EvidenceCsvRow, isSafeApp: Boolean) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            Text(
+                text = inputSourceLabel(row.inputSource),
+                style = MaterialTheme.typography.labelSmall,
+                color = inputSourceColor(row.inputSource),
+            )
             if (row.packageName.isNotBlank()) {
                 Text(
                     text = row.packageName,
@@ -1273,6 +1316,15 @@ private fun eventLabel(eventType: String): String {
     }
 }
 
+private fun inputSourceLabel(inputSource: String): String {
+    return when (inputSource) {
+        InputSourceTypes.DirectTouchObserved -> "Direct touch observed"
+        InputSourceTypes.NoDirectTouchObserved -> "No direct touch observed"
+        InputSourceTypes.UnknownLegacy -> "Unknown legacy source"
+        else -> inputSource
+    }
+}
+
 private fun knownAppsFrom(
     rollingLogs: List<TouchLogEntry>,
     savedLogs: List<SavedEvidenceLogEntry>,
@@ -1297,6 +1349,15 @@ private fun knownAppsFrom(
 @Composable
 private fun safeAppColor(): Color {
     return if (isSystemInDarkTheme()) Color(0xFF193D34) else Color(0xFFE7F5EF)
+}
+
+@Composable
+private fun inputSourceColor(inputSource: String): Color {
+    return when (inputSource) {
+        InputSourceTypes.DirectTouchObserved -> MaterialTheme.colorScheme.primary
+        InputSourceTypes.NoDirectTouchObserved -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 }
 
 private fun Modifier.compactButton(): Modifier {

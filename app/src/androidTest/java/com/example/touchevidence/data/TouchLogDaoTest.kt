@@ -127,6 +127,13 @@ class TouchLogDaoTest {
     }
 
     @Test
+    fun touchLogEntry_defaultsInputSourceForLegacyRows() = runBlocking {
+        dao.insert(entry(timestamp = 1_000, eventType = TouchEventTypes.ScreenTouchClick))
+
+        assertEquals(InputSourceTypes.UnknownLegacy, dao.logsSince(0).single().inputSource)
+    }
+
+    @Test
     fun savedEvidenceLogs_insertListFetchAndDelete() = runBlocking {
         val id = savedDao.insert(
             SavedEvidenceLogEntry(

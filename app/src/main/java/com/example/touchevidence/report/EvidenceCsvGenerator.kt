@@ -1,6 +1,7 @@
 package com.example.touchevidence.report
 
 import com.example.touchevidence.DEFAULT_RETENTION_MINUTES
+import com.example.touchevidence.data.InputSourceTypes
 import com.example.touchevidence.data.TouchEventTypes
 import com.example.touchevidence.data.TouchLogEntry
 import com.example.touchevidence.retentionMinutesToMs
@@ -15,6 +16,7 @@ data class EvidenceCsvRow(
     val eventType: String,
     val appName: String,
     val packageName: String,
+    val inputSource: String,
 )
 
 object EvidenceCsvGenerator {
@@ -25,6 +27,7 @@ object EvidenceCsvGenerator {
         "event_type",
         "app_name",
         "package_name",
+        "input_source",
     )
 
     fun generate(
@@ -49,6 +52,7 @@ object EvidenceCsvGenerator {
                         "NO_EVENTS_RECORDED",
                         "",
                         "",
+                        "",
                     ),
                 )
             } else {
@@ -61,6 +65,7 @@ object EvidenceCsvGenerator {
                             entry.eventType,
                             entry.appLabel?.takeIf { it.isNotBlank() } ?: "Unknown",
                             entry.packageName,
+                            entry.inputSource,
                         ),
                     )
                 }
@@ -71,7 +76,7 @@ object EvidenceCsvGenerator {
     fun parse(csv: String): List<EvidenceCsvRow> {
         return parseRows(csv)
             .drop(1)
-            .filter { it.size >= header.size }
+            .filter { it.size >= LEGACY_COLUMN_COUNT }
             .map { row ->
                 EvidenceCsvRow(
                     generatedAt = row[0],
@@ -80,6 +85,7 @@ object EvidenceCsvGenerator {
                     eventType = row[3],
                     appName = row[4],
                     packageName = row[5],
+                    inputSource = row.getOrNull(6) ?: InputSourceTypes.UnknownLegacy,
                 )
             }
     }
@@ -88,6 +94,8 @@ object EvidenceCsvGenerator {
         val cutoff = generatedAt - retentionMinutesToMs(retentionMinutes)
         return logs.count { it.timestamp >= cutoff && it.eventType in TouchEventTypes.touchEvents }
     }
+
+    private const val LEGACY_COLUMN_COUNT = 6
 
     private fun StringBuilder.appendCsvRow(values: List<String>) {
         append(values.joinToString(",") { escape(it) })
