@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.pm.PackageManager
 import android.view.accessibility.AccessibilityEvent
 import com.example.touchevidence.data.AppDatabase
+import com.example.touchevidence.data.InputSourceTypes
 import com.example.touchevidence.data.TouchEventTypes
 import com.example.touchevidence.data.TouchLogEntry
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +18,8 @@ class TouchLoggerService : AccessibilityService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var db: AppDatabase
     private var currentPackage: String = UNKNOWN_PACKAGE
+    private var touchInteractionActive: Boolean = false
+    private var lastDirectTouchAt: Long = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -35,6 +38,20 @@ class TouchLoggerService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
 
+        val timestamp = System.currentTimeMillis()
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_TOUCH_INTERACTION_START -> {
+                touchInteractionActive = true
+                lastDirectTouchAt = timestamp
+                return
+            }
+            AccessibilityEvent.TYPE_TOUCH_INTERACTION_END -> {
+                touchInteractionActive = false
+                lastDirectTouchAt = timestamp
+                return
+            }
+        }
+
         val packageName = event.packageName?.toString()
         if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && !packageName.isNullOrBlank()) {
             currentPackage = packageName
@@ -48,9 +65,13 @@ class TouchLoggerService : AccessibilityService() {
             else -> null
         } ?: return
 
-        val timestamp = System.currentTimeMillis()
         val resolvedPackage = packageName ?: currentPackage
         if (resolvedPackage == applicationContext.packageName) return
+        val inputSource = if (touchInteractionActive || timestamp - lastDirectTouchAt <= DIRECT_TOUCH_GRACE_MS) {
+            InputSourceTypes.DirectTouchObserved
+        } else {
+            InputSourceTypes.NoDirectTouchObserved
+        }
 
         serviceScope.launch {
             runCatching {
@@ -62,6 +83,7 @@ class TouchLoggerService : AccessibilityService() {
                         packageName = resolvedPackage,
                         appLabel = appLabelFor(resolvedPackage),
                         eventType = eventType,
+                        inputSource = inputSource,
                         durationMs = null,
                     ),
                 )
@@ -100,5 +122,6 @@ class TouchLoggerService : AccessibilityService() {
     companion object {
         private const val UNKNOWN_PACKAGE = "Unknown"
         private const val PRUNE_WATCHDOG_INTERVAL_MS = 30_000L
+        private const val DIRECT_TOUCH_GRACE_MS = 1_500L
     }
 }

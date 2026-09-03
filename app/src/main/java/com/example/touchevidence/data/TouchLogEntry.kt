@@ -19,6 +19,8 @@ data class TouchLogEntry(
     val appLabel: String?,
     @ColumnInfo(name = "event_type")
     val eventType: String,
+    @ColumnInfo(name = "input_source")
+    val inputSource: String = InputSourceTypes.UnknownLegacy,
     @ColumnInfo(name = "duration_ms")
     val durationMs: Long? = null,
 )
