@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -15,11 +16,7 @@ class SaveEvidenceTileService : TileService() {
 
     override fun onStartListening() {
         super.onStartListening()
-        qsTile?.apply {
-            label = TILE_LABEL
-            state = Tile.STATE_ACTIVE
-            updateTile()
-        }
+        showIdleTile()
     }
 
     override fun onClick() {
@@ -45,11 +42,17 @@ class SaveEvidenceTileService : TileService() {
                             "Saved ${saved.eventCount} DriveTouch events.",
                             Toast.LENGTH_SHORT,
                         ).show()
+                        scope.launch {
+                            delay(SAVED_PULSE_MS)
+                            withContext(Dispatchers.Main) {
+                                showIdleTile()
+                            }
+                        }
                     }
                     .onFailure {
                         qsTile?.apply {
                             label = TILE_LABEL
-                            state = Tile.STATE_UNAVAILABLE
+                            state = Tile.STATE_INACTIVE
                             updateTile()
                         }
                         Toast.makeText(
@@ -63,11 +66,7 @@ class SaveEvidenceTileService : TileService() {
     }
 
     override fun onStopListening() {
-        qsTile?.apply {
-            label = TILE_LABEL
-            state = Tile.STATE_ACTIVE
-            updateTile()
-        }
+        showIdleTile()
         super.onStopListening()
     }
 
@@ -78,5 +77,14 @@ class SaveEvidenceTileService : TileService() {
 
     companion object {
         private const val TILE_LABEL = "Save DriveTouch"
+        private const val SAVED_PULSE_MS = 3_000L
+    }
+
+    private fun showIdleTile() {
+        qsTile?.apply {
+            label = TILE_LABEL
+            state = Tile.STATE_INACTIVE
+            updateTile()
+        }
     }
 }
